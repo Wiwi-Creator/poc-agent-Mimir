@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     groq_base_url: str = "https://api.groq.com/openai/v1"
     line_channel_access_token: str = ""
     line_channel_secret: str = ""
+    line_send_thinking_message: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

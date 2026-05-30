@@ -18,9 +18,21 @@ class FakeMimir:
 class FakeLineClient:
     def __init__(self):
         self.replies = []
+        self.loading = []
+        self.read_tokens = []
+        self.pushes = []
+
+    async def start_loading(self, chat_id, loading_seconds=10):
+        self.loading.append((chat_id, loading_seconds))
+
+    async def mark_as_read(self, mark_as_read_token):
+        self.read_tokens.append(mark_as_read_token)
 
     async def reply_text(self, reply_token, text):
         self.replies.append((reply_token, text))
+
+    async def push_text(self, user_id, text):
+        self.pushes.append((user_id, text))
 
 
 def make_signature(body: bytes, secret: str) -> str:
@@ -49,6 +61,7 @@ async def test_handle_line_text_message_replies():
             {
                 "type": "message",
                 "replyToken": "reply-token",
+                "markAsReadToken": "read-token",
                 "source": {"userId": "user-123"},
                 "message": {"type": "text", "text": "bench 80kg"},
             }
@@ -58,5 +71,34 @@ async def test_handle_line_text_message_replies():
     result = await handle_line_events(payload, FakeMimir(), line_client)
 
     assert result == {"ok": True, "handled": 1, "ignored": 0}
+    assert line_client.read_tokens == ["read-token"]
+    assert line_client.loading == [("user-123", 10)]
+    assert line_client.pushes == [("user-123", "Mimir is thinking... Meow")]
     assert line_client.replies == [("reply-token", "reply to bench 80kg")]
 
+
+@pytest.mark.asyncio
+async def test_handle_line_text_message_can_skip_visible_thinking_message():
+    line_client = FakeLineClient()
+    payload = {
+        "events": [
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "source": {"userId": "user-123"},
+                "message": {"type": "text", "text": "hello"},
+            }
+        ]
+    }
+
+    result = await handle_line_events(
+        payload,
+        FakeMimir(),
+        line_client,
+        send_thinking_message=False,
+    )
+
+    assert result == {"ok": True, "handled": 1, "ignored": 0}
+    assert line_client.loading == [("user-123", 10)]
+    assert line_client.pushes == []
+    assert line_client.replies == [("reply-token", "reply to hello")]

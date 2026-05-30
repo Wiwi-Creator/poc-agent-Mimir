@@ -66,7 +66,12 @@ async def line_webhook(
     try:
         verify_line_signature(body, x_line_signature, settings.line_channel_secret)
         payload = await request.json()
-        return await handle_line_events(payload, mimir, line_client)
+        return await handle_line_events(
+            payload,
+            mimir,
+            line_client,
+            send_thinking_message=settings.line_send_thinking_message,
+        )
     except LineSignatureError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except GroqClientError as exc:
