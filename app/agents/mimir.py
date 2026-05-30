@@ -18,7 +18,7 @@ class MimirAgent:
             return ChatResponse(
                 agent=self.hulk.name,
                 route="hulk",
-                reply=reply,
+                reply=self._with_title("🏋️‍♂️ Hulk :", reply),
                 metadata={"routed_by": self.name},
             )
 
@@ -33,9 +33,15 @@ class MimirAgent:
         return ChatResponse(
             agent=self.name,
             route="mimir",
-            reply=reply,
+            reply=self._with_title("🐱 Mimir :", reply),
             metadata={"enabled_agents": ["Hulk"]},
         )
+
+    def _with_title(self, title: str, reply: str) -> str:
+        normalized = reply.lstrip()
+        if normalized.startswith(title):
+            return normalized
+        return f"{title}\n{normalized}"
 
     def route(self, message: str) -> str:
         normalized = message.lower()

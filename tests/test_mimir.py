@@ -24,7 +24,7 @@ async def test_routes_workout_message_to_hulk():
 
     assert response.route == "hulk"
     assert response.agent == "Hulk"
-    assert response.reply == "Fake Hulk response"
+    assert response.reply == "🟢💪 Hulk :\nFake Hulk response"
 
 
 @pytest.mark.asyncio
@@ -35,14 +35,18 @@ async def test_non_fitness_message_stays_with_mimir():
 
     assert response.route == "mimir"
     assert response.agent == "Mimir"
-    assert response.reply == "Fake Mimir response"
+    assert response.reply == "🐱 Mimir :\nFake Mimir response"
     system_prompt = groq_client.calls[0][0].content
     assert "cat-like personal supervisor agent" in system_prompt
+    assert "multi-agent system" in system_prompt
+    assert "Master is Wiwi" in system_prompt
+    assert "Currently the only sub-agent is Hulk" in system_prompt
     assert "reply only in Traditional Chinese" in system_prompt
     assert "Do not use Simplified Chinese" in system_prompt
     assert "0-2 per reply" in system_prompt
     assert 'If replying in English, use "Meow" and never use "喵".' in system_prompt
     assert 'If replying in Chinese, use "喵" and never use "Meow".' in system_prompt
+    assert 'the app will add "🐱 Mimir" automatically' in system_prompt
 
 
 @pytest.mark.asyncio
@@ -52,3 +56,16 @@ async def test_routes_chinese_workout_message_to_hulk():
 
     assert response.route == "hulk"
     assert response.agent == "Hulk"
+
+
+@pytest.mark.asyncio
+async def test_hulk_prompt_stays_in_scope():
+    groq_client = FakeGroqClient()
+    mimir = MimirAgent(groq_client=groq_client)
+
+    await mimir.respond(ChatRequest(message="How many calories in chicken rice?"))
+
+    system_prompt = groq_client.calls[0][0].content
+    assert "Only answer questions related to workouts" in system_prompt
+    assert "outside those areas" in system_prompt
+    assert 'the app will add "🟢💪 Hulk" automatically' in system_prompt
