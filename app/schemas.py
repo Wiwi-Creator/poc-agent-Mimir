@@ -8,6 +8,8 @@ class HealthResponse(BaseModel):
     app_env: str
     groq_model: str
     groq_configured: bool
+    line_configured: bool
+    line_signature_verification_configured: bool
 
 
 class ChatRequest(BaseModel):
