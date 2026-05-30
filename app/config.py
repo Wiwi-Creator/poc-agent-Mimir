@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     line_channel_access_token: str = ""
     line_channel_secret: str = ""
     line_send_thinking_message: bool = True
+    workout_db_path: str = "/tmp/mimir_workouts.sqlite3"
+    workout_plan_db_path: str = "/tmp/mimir_workout_plans.sqlite3"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

@@ -1,24 +1,38 @@
 from app.agents.hulk import HulkAgent
 from app.agents.prompts import MIMIR_SYSTEM_PROMPT
 from app.llm.groq_client import GroqClient
+from app.memory.workout_store import WorkoutStore
+from app.planning.plan_store import WorkoutPlanStore
 from app.schemas import ChatRequest, ChatResponse, LLMMessage
+from app.tools.hulk_tools import HulkToolRegistry
 
 
 class MimirAgent:
     name = "Mimir"
 
-    def __init__(self, groq_client: GroqClient) -> None:
+    def __init__(
+        self,
+        groq_client: GroqClient,
+        workout_store: WorkoutStore | None = None,
+        plan_store: WorkoutPlanStore | None = None,
+        hulk_tools: HulkToolRegistry | None = None,
+    ) -> None:
         self.groq_client = groq_client
-        self.hulk = HulkAgent(groq_client)
+        self.hulk = HulkAgent(
+            groq_client,
+            workout_store=workout_store,
+            plan_store=plan_store,
+            tool_registry=hulk_tools,
+        )
 
     async def respond(self, request: ChatRequest) -> ChatResponse:
         route = self.route(request.message)
         if route == "hulk":
-            reply = await self.hulk.respond(request.message)
+            reply = await self.hulk.respond(request.message, user_id=request.user_id)
             return ChatResponse(
                 agent=self.hulk.name,
                 route="hulk",
-                reply=self._with_title("🏋️‍♂️ Hulk :", reply),
+                reply=self._with_title("🟢💪 Hulk :", reply),
                 metadata={"routed_by": self.name},
             )
 
@@ -56,6 +70,16 @@ class MimirAgent:
             "workout",
             "routine",
             "program",
+            "training question",
+            "workout question",
+            "fitness question",
+            "ask hulk",
+            "talk to hulk",
+            "ask a workout",
+            "ask about workout",
+            "ask about training",
+            "training advice",
+            "workout advice",
             "sets",
             "reps",
             "kg",
@@ -106,6 +130,19 @@ class MimirAgent:
             "体态",
             "姿勢",
             "姿势",
+            "問健身",
+            "问健身",
+            "健身問題",
+            "健身问题",
+            "訓練問題",
+            "训练问题",
+            "問訓練",
+            "问训练",
+            "問飲食",
+            "问饮食",
+            "問熱量",
+            "问热量",
+            "問hulk",
         }
         if any(keyword in normalized for keyword in hulk_keywords):
             return "hulk"

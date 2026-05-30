@@ -9,7 +9,10 @@ from app.line.webhook import (
     verify_line_signature,
 )
 from app.llm.groq_client import GroqClient, GroqClientError
+from app.memory.workout_store import WorkoutStore
+from app.planning.plan_store import WorkoutPlanStore
 from app.schemas import ChatRequest, ChatResponse, HealthResponse
+from app.tools.hulk_tools import HulkToolRegistry
 
 app = FastAPI(
     title="Mimir Local Prototype",
@@ -24,7 +27,15 @@ def get_mimir(settings: Settings = Depends(get_settings)) -> MimirAgent:
         model=settings.groq_model,
         base_url=settings.groq_base_url,
     )
-    return MimirAgent(groq_client=groq_client)
+    workout_store = WorkoutStore(settings.workout_db_path)
+    plan_store = WorkoutPlanStore(settings.workout_plan_db_path)
+    hulk_tools = HulkToolRegistry()
+    return MimirAgent(
+        groq_client=groq_client,
+        workout_store=workout_store,
+        plan_store=plan_store,
+        hulk_tools=hulk_tools,
+    )
 
 
 def get_line_client(settings: Settings = Depends(get_settings)) -> LineClient:

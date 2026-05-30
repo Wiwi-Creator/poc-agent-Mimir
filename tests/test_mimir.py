@@ -59,6 +59,24 @@ async def test_routes_chinese_workout_message_to_hulk():
 
 
 @pytest.mark.asyncio
+async def test_routes_workout_meta_intent_to_hulk_without_confirmation():
+    mimir = MimirAgent(groq_client=FakeGroqClient())
+    response = await mimir.respond(ChatRequest(message="I need to ask a workout question"))
+
+    assert response.route == "hulk"
+    assert response.agent == "Hulk"
+
+
+@pytest.mark.asyncio
+async def test_routes_chinese_workout_meta_intent_to_hulk_without_confirmation():
+    mimir = MimirAgent(groq_client=FakeGroqClient())
+    response = await mimir.respond(ChatRequest(message="我想問健身問題"))
+
+    assert response.route == "hulk"
+    assert response.agent == "Hulk"
+
+
+@pytest.mark.asyncio
 async def test_hulk_prompt_stays_in_scope():
     groq_client = FakeGroqClient()
     mimir = MimirAgent(groq_client=groq_client)
@@ -69,3 +87,18 @@ async def test_hulk_prompt_stays_in_scope():
     assert "Only answer questions related to workouts" in system_prompt
     assert "outside those areas" in system_prompt
     assert 'the app will add "🟢💪 Hulk" automatically' in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_mimir_intro_prompt_mentions_hulk_capabilities():
+    groq_client = FakeGroqClient()
+    mimir = MimirAgent(groq_client=groq_client)
+
+    await mimir.respond(ChatRequest(message="What can you do?"))
+
+    system_prompt = groq_client.calls[0][0].content
+    assert "Mimir is a multi-agent supervisor system" in system_prompt
+    assert "workout planning" in system_prompt
+    assert "exercise alternatives" in system_prompt
+    assert "meal estimates" in system_prompt
+    assert "posture feedback" in system_prompt
