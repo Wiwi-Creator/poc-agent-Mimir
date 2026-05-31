@@ -44,11 +44,9 @@ def is_plan_request(message: str) -> bool:
         "一週",
         "一周",
         "課表",
-        "计划",
         "計畫",
         "安排",
         "菜單",
-        "菜单",
     }
     training_terms = {
         "workout",
@@ -57,12 +55,9 @@ def is_plan_request(message: str) -> bool:
         "lift",
         "健身",
         "訓練",
-        "训练",
         "重訓",
-        "重训",
         "增肌",
         "減脂",
-        "减脂",
     }
     return any(keyword in normalized for keyword in keywords) and any(
         term in normalized for term in training_terms
@@ -89,7 +84,7 @@ def _infer_goal(message: str) -> str:
     normalized = message.lower()
     if any(term in normalized for term in {"strength", "力量", "肌力"}):
         return "strength"
-    if any(term in normalized for term in {"fat loss", "cut", "減脂", "减脂"}):
+    if any(term in normalized for term in {"fat loss", "cut", "減脂"}):
         return "fat loss"
     return "hypertrophy"
 
@@ -167,4 +162,3 @@ def _default_days(days_per_week: int) -> list[PlannedWorkoutDay]:
         ),
     ]
     return templates[:days_per_week]
-

@@ -9,6 +9,7 @@ from app.line.webhook import (
     verify_line_signature,
 )
 from app.llm.groq_client import GroqClient, GroqClientError
+from app.memory.user_state_store import UserStateStore
 from app.memory.workout_store import WorkoutStore
 from app.planning.plan_store import WorkoutPlanStore
 from app.schemas import ChatRequest, ChatResponse, HealthResponse
@@ -29,11 +30,13 @@ def get_mimir(settings: Settings = Depends(get_settings)) -> MimirAgent:
     )
     workout_store = WorkoutStore(settings.workout_db_path)
     plan_store = WorkoutPlanStore(settings.workout_plan_db_path)
+    user_state_store = UserStateStore(settings.user_state_db_path)
     hulk_tools = HulkToolRegistry()
     return MimirAgent(
         groq_client=groq_client,
         workout_store=workout_store,
         plan_store=plan_store,
+        user_state_store=user_state_store,
         hulk_tools=hulk_tools,
     )
 

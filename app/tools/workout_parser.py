@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 
 EXERCISE_ALIASES = {
-    "bench": ["bench", "bench press", "臥推", "卧推"],
+    "bench": ["bench", "bench press", "臥推"],
     "squat": ["squat", "深蹲"],
     "deadlift": ["deadlift", "硬舉", "硬拉"],
     "overhead press": ["overhead press", "shoulder press", "ohp", "肩推"],
@@ -27,7 +27,6 @@ def is_workout_log_request(message: str) -> bool:
         "record",
         "tracked",
         "記錄",
-        "纪录",
         "紀錄",
         "登記",
     }
@@ -95,7 +94,7 @@ def _find_reps(message: str) -> int | None:
 
 def _find_sets(message: str) -> int | None:
     patterns = [
-        r"(\d+)\s*(?:sets?|組|组)",
+        r"(\d+)\s*(?:sets?|組)",
         r"(\d+)\s*x\s*\d+",
     ]
     for pattern in patterns:
@@ -103,4 +102,3 @@ def _find_sets(message: str) -> int | None:
         if match:
             return int(match.group(1))
     return None
-

@@ -130,7 +130,6 @@ def _should_lookup_research(message: str) -> bool:
             "pubmed",
             "研究",
             "科學",
-            "证据",
             "證據",
         }
     )

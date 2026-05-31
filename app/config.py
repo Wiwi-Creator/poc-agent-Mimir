@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     line_send_thinking_message: bool = True
     workout_db_path: str = "/tmp/mimir_workouts.sqlite3"
     workout_plan_db_path: str = "/tmp/mimir_workout_plans.sqlite3"
+    user_state_db_path: str = "/tmp/mimir_user_state.sqlite3"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
