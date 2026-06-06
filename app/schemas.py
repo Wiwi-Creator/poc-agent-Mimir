@@ -21,9 +21,20 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     agent: str
-    route: Literal["hulk", "mimir"]
+    route: str
     reply: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentInfo(BaseModel):
+    id: str
+    name: str
+    role: str
+    description: str
+    icon: str
+    color: str
+    capabilities: list[str]
+    status: Literal["online"] = "online"
 
 
 class LLMMessage(BaseModel):

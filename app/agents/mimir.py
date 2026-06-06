@@ -1,4 +1,22 @@
 from app.agents.hulk import HulkAgent
+from app.agents.catalog import (
+    DRAGONITE_PROFILE,
+    HULK_PROFILE,
+    MEWTWO_PROFILE,
+    MIMIR_PROFILE,
+    PORYGON_PROFILE,
+    ROTOM_PROFILE,
+    SAGE_PROFILE,
+)
+from app.agents.prompts import (
+    DRAGONITE_SYSTEM_PROMPT,
+    MEWTWO_SYSTEM_PROMPT,
+    PORYGON_SYSTEM_PROMPT,
+    ROTOM_SYSTEM_PROMPT,
+    SAGE_SYSTEM_PROMPT,
+)
+from app.agents.registry import AgentRegistry
+from app.agents.specialist import PromptSpecialistAgent
 from app.llm.groq_client import GroqClient
 from app.memory.user_state_store import UserStateStore
 from app.memory.workout_store import WorkoutStore
@@ -33,6 +51,52 @@ class MimirAgent:
             physique_analyzer=physique_analyzer,
             image_analyzer=image_analyzer,
         )
+        self.registry = AgentRegistry()
+        self.registry.register(HULK_PROFILE, self.hulk)
+        self.registry.extend(
+            (
+                (
+                    DRAGONITE_PROFILE,
+                    PromptSpecialistAgent(
+                        groq_client,
+                        DRAGONITE_PROFILE,
+                        DRAGONITE_SYSTEM_PROMPT,
+                    ),
+                ),
+                (
+                    PORYGON_PROFILE,
+                    PromptSpecialistAgent(
+                        groq_client,
+                        PORYGON_PROFILE,
+                        PORYGON_SYSTEM_PROMPT,
+                    ),
+                ),
+                (
+                    SAGE_PROFILE,
+                    PromptSpecialistAgent(
+                        groq_client,
+                        SAGE_PROFILE,
+                        SAGE_SYSTEM_PROMPT,
+                    ),
+                ),
+                (
+                    MEWTWO_PROFILE,
+                    PromptSpecialistAgent(
+                        groq_client,
+                        MEWTWO_PROFILE,
+                        MEWTWO_SYSTEM_PROMPT,
+                    ),
+                ),
+                (
+                    ROTOM_PROFILE,
+                    PromptSpecialistAgent(
+                        groq_client,
+                        ROTOM_PROFILE,
+                        ROTOM_SYSTEM_PROMPT,
+                    ),
+                ),
+            )
+        )
 
     async def respond(self, request: ChatRequest) -> ChatResponse:
         if self._is_closing(request.message):
@@ -40,20 +104,28 @@ class MimirAgent:
                 agent=self.name,
                 route="mimir",
                 reply=self._with_title("🐱 Mimir :", "Have a nice day! Meow ~"),
-                metadata={"enabled_agents": ["Hulk"]},
+                metadata={"enabled_agents": self.registry.enabled_agent_names()},
             )
 
         route = self.route(request.message)
-        if route == "hulk":
-            if self._is_hulk_handoff_only(request.message):
-                reply = self._hulk_handoff_reply(request.message)
+        specialist = self.registry.get(route)
+        profile = self.registry.profile(route)
+        if specialist and profile:
+            if self._is_specialist_handoff_only(request.message, profile.name):
+                reply = self._specialist_handoff_reply(profile.name, request.message)
             else:
-                reply = await self.hulk.respond(request.message, user_id=request.user_id)
+                reply = await specialist.respond(
+                    request.message,
+                    user_id=request.user_id,
+                )
             return ChatResponse(
-                agent=self.hulk.name,
-                route="hulk",
-                reply=self._with_title("🟢💪 Hulk :", reply),
-                metadata={"routed_by": self.name},
+                agent=profile.name,
+                route=profile.id,
+                reply=self._with_title(
+                    f"{profile.icon} {profile.name} :",
+                    reply,
+                ),
+                metadata={"routed_by": self.name, "role": profile.role},
             )
 
         reply = self._mimir_reply(request.message, request.user_id)
@@ -61,8 +133,11 @@ class MimirAgent:
             agent=self.name,
             route="mimir",
             reply=self._with_title("🐱 Mimir :", reply),
-            metadata={"enabled_agents": ["Hulk"]},
+            metadata={"enabled_agents": self.registry.enabled_agent_names()},
         )
+
+    def agent_profiles(self):
+        return (MIMIR_PROFILE, *self.registry.profiles())
 
     async def respond_to_physique_image(
         self,
@@ -136,36 +211,60 @@ class MimirAgent:
             return (
                 "喵。我是 Mimir，Wiwi 的貓型主管代理，也是一個多代理系統的入口。"
                 "我負責陪你簡短聊天、理解需求，並把專門任務交給合適的子代理。\n\n"
-                "目前的子代理是 Hulk：可以處理訓練課表、健身建議、動作替代、"
-                "組數與次數追蹤、訓練紀錄、餐點估算、熱量與巨量營養素、"
-                "營養情境、體態與姿勢回饋。"
+                "目前的專家團隊有 Hulk（健身與營養）、Dragonite（旅行）、"
+                "Porygon（財務）、Sage（職涯）、Mewtwo（科技資訊）與 "
+                "Rotom（會議支援）。直接告訴我目標，我會交給合適的專家。"
             )
         return (
             "Meow. I am Mimir, Wiwi's cat-like supervisor agent and the front "
             "door to a multi-agent system. I can socialize briefly, understand "
             "what you need, and route specialist tasks.\n\n"
-            "Current sub-agent: Hulk. Hulk handles workout planning, training "
-            "advice, exercise alternatives, set/rep tracking, workout logs, "
-            "meal estimates, calories/macros, nutrition context, physique/body "
-            "composition, and posture feedback."
+            "Current sub-agent team: Hulk for workout planning, training advice, "
+            "exercise alternatives, workout logs, meal estimates, and posture "
+            "feedback; Dragonite "
+            "for travel, Porygon for finance, Sage for career, Mewtwo for "
+            "technology information, and Rotom for meeting support. Tell me the "
+            "goal and I will route it."
         )
 
     def _social_reply(self, message: str) -> str:
         if _contains_chinese(message):
-            return "喵，我在。今天想聊一下，還是要我幫你叫 Hulk 處理訓練或飲食？"
-        return "Meow, I am here. Want to chat for a moment, or should I route a workout or nutrition question to Hulk?"
+            return "喵，我在。告訴我你想完成什麼，我會找合適的專家一起處理。"
+        return "Meow, I am here. Tell me what you need and I will bring in the right specialist."
 
     def _out_of_scope_reply(self, message: str) -> str:
         if _contains_chinese(message):
             return (
-                "喵，這題超出我目前的職責。我可以陪你簡短聊天，或把健身、訓練、"
-                "飲食、熱量、巨量營養素、體態與姿勢問題交給 Hulk。"
+                "喵，這題目前沒有對應的專家。我可以處理健身、旅行、財務、"
+                "職涯、科技資訊與會議支援，也可以陪你簡短聊天。"
             )
         return (
             "Meow, that is outside my current role. I can socialize briefly or "
-            "route fitness, training, nutrition, meal, calorie/macro, physique, "
-            "and posture questions to Hulk."
+            "route workout, travel, finance, career, technology, or meeting work "
+            "to a specialist."
         )
+
+    def _specialist_handoff_reply(self, name: str, message: str) -> str:
+        if _contains_chinese(message):
+            return f"{name} 已上線。請直接告訴我你想完成的目標。"
+        return f"{name} is here. Tell me the outcome you want."
+
+    def _is_specialist_handoff_only(self, message: str, name: str) -> bool:
+        normalized = message.strip().lower()
+        agent_name = name.lower()
+        return normalized in {
+            agent_name,
+            f"call {agent_name}",
+            f"need {agent_name}",
+            f"ask {agent_name}",
+            f"talk to {agent_name}",
+            f"叫{agent_name}",
+            f"叫 {agent_name}",
+            f"找{agent_name}",
+            f"找 {agent_name}",
+            f"需要{agent_name}",
+            f"需要 {agent_name}",
+        } or (agent_name == "hulk" and self._is_hulk_handoff_only(message))
 
     def _hulk_handoff_reply(self, message: str) -> str:
         if _contains_chinese(message):
@@ -284,125 +383,7 @@ class MimirAgent:
         return any(keyword in normalized for keyword in social_keywords)
 
     def route(self, message: str) -> str:
-        normalized = message.lower()
-        hulk_keywords = {
-            "bench",
-            "squat",
-            "deadlift",
-            "press",
-            "row",
-            "pullup",
-            "pull-up",
-            "workout",
-            "work out",
-            "working out",
-            "exercise",
-            "gym",
-            "muscle",
-            "muscles",
-            "hypertrophy",
-            "strength",
-            "routine",
-            "program",
-            "training question",
-            "workout question",
-            "fitness question",
-            "call hulk",
-            "call huk",
-            "need hulk",
-            "need huk",
-            "ask hulk",
-            "ask huk",
-            "talk to hulk",
-            "talk to huk",
-            "call sub agent",
-            "call sub-agent",
-            "need sub agent",
-            "need sub-agent",
-            "need $sub agent",
-            "need $sub-agent",
-            "$sub agent",
-            "$sub-agent",
-            "ask a workout",
-            "ask about workout",
-            "ask about training",
-            "training advice",
-            "workout advice",
-            "sets",
-            "reps",
-            "kg",
-            "lb",
-            "protein",
-            "carb",
-            "carbs",
-            "fat",
-            "macro",
-            "macros",
-            "calorie",
-            "calories",
-            "meal",
-            "food",
-            "diet",
-            "bulk",
-            "body fat",
-            "physique",
-            "posture",
-            "progress photo",
-            "增肌",
-            "肌肉",
-            "肌群",
-            "練胸",
-            "練背",
-            "練腿",
-            "運動",
-            "重量訓練",
-            "健身",
-            "訓練",
-            "重訓",
-            "臥推",
-            "深蹲",
-            "硬舉",
-            "硬拉",
-            "組",
-            "次",
-            "蛋白質",
-            "碳水",
-            "脂肪",
-            "熱量",
-            "卡路里",
-            "飲食",
-            "餐",
-            "食物",
-            "體脂",
-            "體態",
-            "姿勢",
-            "問健身",
-            "健身問題",
-            "訓練問題",
-            "問訓練",
-            "問飲食",
-            "問熱量",
-            "問hulk",
-            "問huk",
-            "叫hulk",
-            "叫 hulk",
-            "叫huk",
-            "叫 huk",
-            "找hulk",
-            "找 hulk",
-            "找huk",
-            "找 huk",
-            "需要hulk",
-            "需要 hulk",
-            "需要huk",
-            "需要 huk",
-            "子代理",
-            "叫子代理",
-            "需要子代理",
-        }
-        if any(keyword in normalized for keyword in hulk_keywords):
-            return "hulk"
-        return "mimir"
+        return self.registry.match(message) or "mimir"
 
 
 def _contains_chinese(message: str) -> bool:

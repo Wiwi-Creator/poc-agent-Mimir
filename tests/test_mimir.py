@@ -45,7 +45,8 @@ async def test_mimir_intro_only_on_first_greeting():
     second = await mimir.respond(ChatRequest(message="hello", user_id="user-1"))
 
     assert "multi-agent system" in first.reply
-    assert "Current sub-agent: Hulk" in first.reply
+    assert "Current sub-agent team" in first.reply
+    assert "Dragonite" in first.reply
     assert "multi-agent system" not in second.reply
 
 
@@ -59,13 +60,13 @@ async def test_mimir_closing_reply():
 
 
 @pytest.mark.asyncio
-async def test_mimir_refuses_out_of_scope_question():
+async def test_routes_python_question_to_mewtwo():
     mimir = MimirAgent(groq_client=FakeGroqClient())
 
     response = await mimir.respond(ChatRequest(message="How do I learn Python?"))
 
-    assert response.route == "mimir"
-    assert "outside my current role" in response.reply
+    assert response.route == "mewtwo"
+    assert response.agent == "Mewtwo"
 
 
 @pytest.mark.asyncio
@@ -159,3 +160,41 @@ async def test_mimir_intro_prompt_mentions_hulk_capabilities():
     assert "exercise alternatives" in response.reply
     assert "meal estimates" in response.reply
     assert "posture feedback" in response.reply
+    assert "Dragonite" in response.reply
+    assert "Porygon" in response.reply
+    assert "Sage" in response.reply
+    assert "Mewtwo" in response.reply
+    assert "Rotom" in response.reply
+
+
+@pytest.mark.parametrize(
+    ("message", "route", "agent"),
+    [
+        ("Plan a 3-day trip to Kyoto", "dragonite", "Dragonite"),
+        ("Help me make a monthly budget", "porygon", "Porygon"),
+        ("Review my resume for a software job", "sage", "Sage"),
+        ("Explain Kubernetes architecture", "mewtwo", "Mewtwo"),
+        ("Turn these meeting notes into action items", "rotom", "Rotom"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_routes_to_each_specialist(message, route, agent):
+    mimir = MimirAgent(groq_client=FakeGroqClient())
+
+    response = await mimir.respond(ChatRequest(message=message))
+
+    assert response.route == route
+    assert response.agent == agent
+    assert response.metadata["routed_by"] == "Mimir"
+
+
+@pytest.mark.asyncio
+async def test_explicit_specialist_handoff_does_not_call_llm():
+    groq_client = FakeGroqClient()
+    mimir = MimirAgent(groq_client=groq_client)
+
+    response = await mimir.respond(ChatRequest(message="Call Dragonite"))
+
+    assert response.route == "dragonite"
+    assert "Dragonite is here" in response.reply
+    assert groq_client.calls == []

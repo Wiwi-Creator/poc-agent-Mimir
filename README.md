@@ -1,6 +1,15 @@
-# Mimir Local Prototype
+# Mimir Multi-Agent System
 
-Mimir is a local FastAPI supervisor agent. The first sub-agent is Hulk, a fitness coach and nutrition analyzer powered by Groq.
+Mimir is a FastAPI supervisor that routes requests to a small team of
+Groq-powered specialist agents:
+
+- **Mimir:** orchestrator and conversation owner
+- **Hulk:** workout and nutrition
+- **Dragonite:** travel planning
+- **Porygon:** personal finance
+- **Sage:** career development
+- **Mewtwo:** technology information
+- **Rotom:** meeting support
 
 ## Run Locally
 
@@ -12,8 +21,13 @@ uv run uvicorn app.main:app --reload
 Open:
 
 ```text
+http://127.0.0.1:8000/
 http://127.0.0.1:8000/docs
 ```
+
+The root page is a simple agent dashboard and chat console. It uses the same
+`POST /debug/chat` flow as LINE, so dashboard and messaging behavior stay
+aligned.
 
 Health check:
 
@@ -27,6 +41,12 @@ Chat with Mimir:
 curl -X POST http://127.0.0.1:8000/debug/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"I benched 80kg for 5, 5, 4. What should I do next?"}'
+```
+
+List enabled agents:
+
+```bash
+curl http://127.0.0.1:8000/api/agents
 ```
 
 ## Environment

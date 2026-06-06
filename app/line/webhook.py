@@ -13,6 +13,13 @@ logger = logging.getLogger(__name__)
 
 THINKING_MESSAGE = "🐈 Meow ~ (Mimir is thinking)"
 HULK_HANDOFF_MESSAGE = "go through Hulk 🟢💪"
+AGENT_NAMES = {
+    "dragonite": "Dragonite",
+    "porygon": "Porygon",
+    "sage": "Sage",
+    "mewtwo": "Mewtwo",
+    "rotom": "Rotom",
+}
 
 
 class LineSignatureError(RuntimeError):
@@ -126,8 +133,8 @@ async def handle_line_events(
             conversation_id=f"line:{user_id}",
         )
         route = mimir.route(chat_request.message)
-        if send_thinking_message and route == "hulk":
-            await _try_push_hulk_handoff_message(line_client, user_id)
+        if send_thinking_message and route != "mimir":
+            await _try_push_agent_handoff_message(line_client, user_id, route)
         agent_response = await mimir.respond(chat_request)
         await line_client.reply_text(reply_token, agent_response.reply)
         handled += 1
@@ -171,3 +178,19 @@ async def _try_push_hulk_handoff_message(line_client: LineClient, user_id: str) 
     except Exception:
         logger.exception("Could not push LINE Hulk handoff message")
         return
+
+
+async def _try_push_agent_handoff_message(
+    line_client: LineClient,
+    user_id: str,
+    route: str,
+) -> None:
+    if route == "hulk":
+        await _try_push_hulk_handoff_message(line_client, user_id)
+        return
+    agent_name = AGENT_NAMES.get(route, route.title())
+    try:
+        await line_client.push_text(user_id, f"go through {agent_name}")
+        logger.info("Pushed LINE %s handoff message", agent_name)
+    except Exception:
+        logger.exception("Could not push LINE agent handoff message")

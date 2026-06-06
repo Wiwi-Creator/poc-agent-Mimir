@@ -1,7 +1,9 @@
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse
 
 from app.agents.mimir import MimirAgent
 from app.config import Settings, get_settings
+from app.dashboard import DASHBOARD_HTML
 from app.line.client import LineClient, LineClientError
 from app.line.webhook import (
     LineSignatureError,
@@ -13,15 +15,15 @@ from app.media.storage import TemporaryMediaStorage
 from app.memory.user_state_store import UserStateStore
 from app.memory.workout_store import WorkoutStore
 from app.planning.plan_store import WorkoutPlanStore
-from app.schemas import ChatRequest, ChatResponse, HealthResponse
+from app.schemas import AgentInfo, ChatRequest, ChatResponse, HealthResponse
 from app.tools.hulk_tools import HulkToolRegistry
 from app.vision.analyzer import HulkImageAnalyzer, PhysiqueVisionAnalyzer
 from app.vision.gemini_client import GeminiVisionClient
 
 app = FastAPI(
-    title="Mimir Local Prototype",
-    description="Local FastAPI prototype for Mimir and the Hulk sub-agent.",
-    version="0.1.0",
+    title="Mimir Multi-Agent System",
+    description="Mimir orchestrates workout, travel, finance, career, tech, and meeting agents.",
+    version="0.2.0",
 )
 
 
@@ -79,6 +81,27 @@ async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
         line_signature_verification_configured=bool(settings.line_channel_secret),
         vision_configured=bool(settings.google_cloud_project),
     )
+
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard() -> str:
+    return DASHBOARD_HTML
+
+
+@app.get("/api/agents", response_model=list[AgentInfo])
+async def list_agents(mimir: MimirAgent = Depends(get_mimir)) -> list[AgentInfo]:
+    return [
+        AgentInfo(
+            id=profile.id,
+            name=profile.name,
+            role=profile.role,
+            description=profile.description,
+            icon=profile.icon,
+            color=profile.color,
+            capabilities=list(profile.capabilities),
+        )
+        for profile in mimir.agent_profiles()
+    ]
 
 
 @app.post("/debug/chat", response_model=ChatResponse)
