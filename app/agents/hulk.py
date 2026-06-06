@@ -1,6 +1,7 @@
 from app.agents.prompts import HULK_SYSTEM_PROMPT
 from app.llm.groq_client import GroqClient
 from app.memory.workout_store import WorkoutEntry, WorkoutStore
+from app.media.models import MediaAttachment
 from app.planning.plan_store import WorkoutPlanStore
 from app.planning.workout_plan import build_default_plan, format_plan, is_plan_request
 from app.schemas import LLMMessage
@@ -11,6 +12,7 @@ from app.tools.workout_parser import (
     is_workout_log_request,
     parse_workout_entry,
 )
+from app.vision.analyzer import HulkImageAnalyzer, PhysiqueVisionAnalyzer
 
 
 class HulkAgent:
@@ -22,11 +24,15 @@ class HulkAgent:
         workout_store: WorkoutStore | None = None,
         plan_store: WorkoutPlanStore | None = None,
         tool_registry: HulkToolRegistry | None = None,
+        physique_analyzer: PhysiqueVisionAnalyzer | None = None,
+        image_analyzer: HulkImageAnalyzer | None = None,
     ) -> None:
         self.groq_client = groq_client
         self.workout_store = workout_store
         self.plan_store = plan_store
         self.tool_registry = tool_registry or HulkToolRegistry()
+        self.physique_analyzer = physique_analyzer
+        self.image_analyzer = image_analyzer
 
     async def respond(self, message: str, user_id: str = "local-user") -> str:
         context_blocks = []
@@ -84,6 +90,36 @@ class HulkAgent:
                 LLMMessage(role="user", content=user_content),
             ],
             temperature=0.35,
+        )
+
+    async def analyze_physique_photo(
+        self,
+        attachment: MediaAttachment,
+        context: str = "",
+    ) -> str:
+        if not self.physique_analyzer:
+            return (
+                "I received the physique photo, but Gemini vision is not configured "
+                "yet. Ask Mimir to enable Phase 4D vision analysis."
+            )
+        return await self.physique_analyzer.analyze_physique(
+            attachment=attachment,
+            context=context,
+        )
+
+    async def analyze_image(
+        self,
+        attachment: MediaAttachment,
+        context: str = "",
+    ) -> str:
+        if not self.image_analyzer:
+            return (
+                "I received the image, but Gemini vision is not configured yet. "
+                "Ask Mimir to enable Phase 4 image analysis."
+            )
+        return await self.image_analyzer.analyze_image(
+            attachment=attachment,
+            context=context,
         )
 
     async def _gather_tool_context(self, message: str) -> list[ToolResult]:

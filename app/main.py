@@ -9,11 +9,14 @@ from app.line.webhook import (
     verify_line_signature,
 )
 from app.llm.groq_client import GroqClient, GroqClientError
+from app.media.storage import TemporaryMediaStorage
 from app.memory.user_state_store import UserStateStore
 from app.memory.workout_store import WorkoutStore
 from app.planning.plan_store import WorkoutPlanStore
 from app.schemas import ChatRequest, ChatResponse, HealthResponse
 from app.tools.hulk_tools import HulkToolRegistry
+from app.vision.analyzer import HulkImageAnalyzer, PhysiqueVisionAnalyzer
+from app.vision.gemini_client import GeminiVisionClient
 
 app = FastAPI(
     title="Mimir Local Prototype",
@@ -32,17 +35,37 @@ def get_mimir(settings: Settings = Depends(get_settings)) -> MimirAgent:
     plan_store = WorkoutPlanStore(settings.workout_plan_db_path)
     user_state_store = UserStateStore(settings.user_state_db_path)
     hulk_tools = HulkToolRegistry()
+    physique_analyzer = None
+    image_analyzer = None
+    if settings.google_cloud_project:
+        gemini_client = GeminiVisionClient(
+            project=settings.google_cloud_project,
+            location=settings.google_cloud_location,
+            model=settings.gemini_vision_model,
+        )
+        physique_analyzer = PhysiqueVisionAnalyzer(gemini_client)
+        image_analyzer = HulkImageAnalyzer(gemini_client)
     return MimirAgent(
         groq_client=groq_client,
         workout_store=workout_store,
         plan_store=plan_store,
         user_state_store=user_state_store,
         hulk_tools=hulk_tools,
+        physique_analyzer=physique_analyzer,
+        image_analyzer=image_analyzer,
     )
 
 
 def get_line_client(settings: Settings = Depends(get_settings)) -> LineClient:
-    return LineClient(channel_access_token=settings.line_channel_access_token)
+    return LineClient(
+        channel_access_token=settings.line_channel_access_token,
+        base_url=settings.line_api_base_url,
+        data_base_url=settings.line_data_base_url,
+    )
+
+
+def get_media_storage(settings: Settings = Depends(get_settings)) -> TemporaryMediaStorage:
+    return TemporaryMediaStorage(settings.media_tmp_dir)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -54,6 +77,7 @@ async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
         groq_configured=bool(settings.groq_api_key),
         line_configured=bool(settings.line_channel_access_token),
         line_signature_verification_configured=bool(settings.line_channel_secret),
+        vision_configured=bool(settings.google_cloud_project),
     )
 
 
@@ -75,6 +99,7 @@ async def line_webhook(
     settings: Settings = Depends(get_settings),
     mimir: MimirAgent = Depends(get_mimir),
     line_client: LineClient = Depends(get_line_client),
+    media_storage: TemporaryMediaStorage = Depends(get_media_storage),
 ) -> dict[str, object]:
     body = await request.body()
     try:
@@ -84,6 +109,7 @@ async def line_webhook(
             payload,
             mimir,
             line_client,
+            media_storage=media_storage,
             send_thinking_message=settings.line_send_thinking_message,
         )
     except LineSignatureError as exc:

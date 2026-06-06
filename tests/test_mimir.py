@@ -87,6 +87,46 @@ async def test_routes_workout_meta_intent_to_hulk_without_confirmation():
 
 
 @pytest.mark.asyncio
+async def test_call_hulk_routes_to_hulk_handoff_without_refusal():
+    mimir = MimirAgent(groq_client=FakeGroqClient())
+    response = await mimir.respond(ChatRequest(message="Call Hulk"))
+
+    assert response.route == "hulk"
+    assert response.agent == "Hulk"
+    assert response.reply.startswith("🟢💪 Hulk :")
+    assert "Hulk is here" in response.reply
+
+
+@pytest.mark.asyncio
+async def test_call_huk_typo_routes_to_hulk_handoff_without_refusal():
+    mimir = MimirAgent(groq_client=FakeGroqClient())
+    response = await mimir.respond(ChatRequest(message="Call Huk"))
+
+    assert response.route == "hulk"
+    assert response.agent == "Hulk"
+    assert "Hulk is here" in response.reply
+
+
+@pytest.mark.asyncio
+async def test_need_sub_agent_routes_to_hulk_handoff_without_refusal():
+    mimir = MimirAgent(groq_client=FakeGroqClient())
+    response = await mimir.respond(ChatRequest(message="need $sub agent"))
+
+    assert response.route == "hulk"
+    assert response.agent == "Hulk"
+    assert "Hulk is here" in response.reply
+
+
+@pytest.mark.asyncio
+async def test_muscle_question_routes_to_hulk():
+    mimir = MimirAgent(groq_client=FakeGroqClient())
+    response = await mimir.respond(ChatRequest(message="How do I build more muscle?"))
+
+    assert response.route == "hulk"
+    assert response.agent == "Hulk"
+
+
+@pytest.mark.asyncio
 async def test_routes_chinese_workout_meta_intent_to_hulk_without_confirmation():
     mimir = MimirAgent(groq_client=FakeGroqClient())
     response = await mimir.respond(ChatRequest(message="我想問健身問題"))

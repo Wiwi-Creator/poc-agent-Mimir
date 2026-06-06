@@ -16,10 +16,13 @@ Hulk can currently:
 - Use Hulk-only tool interfaces for Taiwan food lookup and sports science lookup.
 - Create and save structured starter workout plans.
 - Reuse the latest saved plan as context in later replies.
+- Receive LINE image messages.
+- Download LINE image content.
+- Run first-pass Gemini Flash physique/posture analysis.
 
 Hulk cannot yet:
 
-- Analyze food/body photos.
+- Analyze food photos.
 - Reliably extract full nutrition facts from every Taiwanese source.
 - Reliably summarize full sports science papers.
 - Compare progress across photos or videos.
@@ -37,6 +40,13 @@ app/
   planning/
     workout_plan.py   # Structured workout plan models and defaults
     plan_store.py     # SQLite workout plan storage
+  media/
+    storage.py        # Temporary media storage
+    models.py         # Media attachment schema
+  vision/
+    gemini_client.py  # Vertex AI Gemini image client
+    analyzer.py       # Physique photo analyzer
+    prompts.py        # Vision safety and output prompts
   tools/
     hulk_tools.py     # Hulk-only tool registry
     web_search.py     # Lightweight web search adapter
@@ -52,8 +62,9 @@ Current Hulk v1 flow:
 4. Hulk reads recent workout history for the user.
 5. Hulk creates or reads a saved workout plan when useful.
 6. Hulk optionally calls a Hulk-only food or research lookup tool.
-7. Hulk sends the original user message plus private context to Groq.
-8. Mimir adds the final title:
+7. For LINE image messages, Mimir downloads the image and routes it to Hulk's physique analyzer.
+8. Hulk sends text requests plus private context to Groq, or sends image requests to Gemini Flash.
+9. Mimir adds the final title:
 
 ```text
 🟢💪 Hulk :
@@ -306,7 +317,7 @@ Goal: handle food photos, physique photos, and lifting videos.
 
 ### 1. LINE Image Intake
 
-Implement:
+Implemented first pass:
 
 - Receive LINE image message.
 - Download image from LINE Content API.
@@ -325,7 +336,7 @@ Use a vision model to identify:
 
 ### 3. Physique Photo Analysis
 
-Use a vision model carefully:
+Implemented first pass with Gemini Flash on Vertex AI:
 
 - Approximate body-fat range, never exact.
 - Posture notes.
@@ -337,6 +348,12 @@ Safety:
 - No body shaming.
 - No medical diagnosis.
 - No exact body-fat claim.
+
+Current limitation:
+
+- Image messages are treated as physique/posture check-ins.
+- Food photo mode is not wired yet.
+- Progress comparison is not implemented yet.
 
 ### 4. Lifting Video Analysis
 

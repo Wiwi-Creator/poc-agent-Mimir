@@ -37,6 +37,24 @@ class FakeHulkTools:
         )
 
 
+class FakePhysiqueAnalyzer:
+    def __init__(self):
+        self.calls = []
+
+    async def analyze_physique(self, attachment, context=""):
+        self.calls.append((attachment, context))
+        return "Physique analysis"
+
+
+class FakeImageAnalyzer:
+    def __init__(self):
+        self.calls = []
+
+    async def analyze_image(self, attachment, context=""):
+        self.calls.append((attachment, context))
+        return "Food check:\nEstimate: 600-750 kcal\nPlease confirm: portion size?"
+
+
 async def test_hulk_logs_workout_and_injects_recent_history(tmp_path):
     groq_client = FakeGroqClient()
     store = WorkoutStore(str(tmp_path / "workouts.sqlite3"))
@@ -129,3 +147,44 @@ async def test_hulk_injects_latest_plan_when_not_creating_new_one(tmp_path):
     user_message = groq_client.calls[1][1].content
     assert "Latest saved workout plan" in user_message
     assert "3-Day Strength Training Plan" in user_message
+
+
+async def test_hulk_analyzes_physique_photo(tmp_path):
+    from app.media.models import MediaAttachment
+
+    analyzer = FakePhysiqueAnalyzer()
+    hulk = HulkAgent(
+        groq_client=FakeGroqClient(),
+        physique_analyzer=analyzer,
+    )
+    attachment = MediaAttachment(
+        path=tmp_path / "photo.jpg",
+        mime_type="image/jpeg",
+        source="test",
+    )
+
+    result = await hulk.analyze_physique_photo(attachment, context="front photo")
+
+    assert result == "Physique analysis"
+    assert analyzer.calls == [(attachment, "front photo")]
+
+
+async def test_hulk_analyzes_food_or_general_image(tmp_path):
+    from app.media.models import MediaAttachment
+
+    analyzer = FakeImageAnalyzer()
+    hulk = HulkAgent(
+        groq_client=FakeGroqClient(),
+        image_analyzer=analyzer,
+    )
+    attachment = MediaAttachment(
+        path=tmp_path / "meal.jpg",
+        mime_type="image/jpeg",
+        source="test",
+    )
+
+    result = await hulk.analyze_image(attachment, context="food photo")
+
+    assert "Food check:" in result
+    assert "Please confirm:" in result
+    assert analyzer.calls == [(attachment, "food photo")]

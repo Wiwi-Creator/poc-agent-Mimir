@@ -2,9 +2,11 @@ from app.agents.hulk import HulkAgent
 from app.llm.groq_client import GroqClient
 from app.memory.user_state_store import UserStateStore
 from app.memory.workout_store import WorkoutStore
+from app.media.models import MediaAttachment
 from app.planning.plan_store import WorkoutPlanStore
 from app.schemas import ChatRequest, ChatResponse
 from app.tools.hulk_tools import HulkToolRegistry
+from app.vision.analyzer import HulkImageAnalyzer, PhysiqueVisionAnalyzer
 
 
 class MimirAgent:
@@ -17,6 +19,8 @@ class MimirAgent:
         plan_store: WorkoutPlanStore | None = None,
         user_state_store: UserStateStore | None = None,
         hulk_tools: HulkToolRegistry | None = None,
+        physique_analyzer: PhysiqueVisionAnalyzer | None = None,
+        image_analyzer: HulkImageAnalyzer | None = None,
     ) -> None:
         self.groq_client = groq_client
         self.user_state_store = user_state_store
@@ -26,6 +30,8 @@ class MimirAgent:
             workout_store=workout_store,
             plan_store=plan_store,
             tool_registry=hulk_tools,
+            physique_analyzer=physique_analyzer,
+            image_analyzer=image_analyzer,
         )
 
     async def respond(self, request: ChatRequest) -> ChatResponse:
@@ -39,7 +45,10 @@ class MimirAgent:
 
         route = self.route(request.message)
         if route == "hulk":
-            reply = await self.hulk.respond(request.message, user_id=request.user_id)
+            if self._is_hulk_handoff_only(request.message):
+                reply = self._hulk_handoff_reply(request.message)
+            else:
+                reply = await self.hulk.respond(request.message, user_id=request.user_id)
             return ChatResponse(
                 agent=self.hulk.name,
                 route="hulk",
@@ -53,6 +62,40 @@ class MimirAgent:
             route="mimir",
             reply=self._with_title("🐱 Mimir :", reply),
             metadata={"enabled_agents": ["Hulk"]},
+        )
+
+    async def respond_to_physique_image(
+        self,
+        attachment: MediaAttachment,
+        user_id: str,
+        context: str = "",
+    ) -> ChatResponse:
+        reply = await self.hulk.analyze_physique_photo(
+            attachment=attachment,
+            context=context,
+        )
+        return ChatResponse(
+            agent=self.hulk.name,
+            route="hulk",
+            reply=self._with_title("🟢💪 Hulk :", reply),
+            metadata={"routed_by": self.name, "media_type": "physique_image"},
+        )
+
+    async def respond_to_image(
+        self,
+        attachment: MediaAttachment,
+        user_id: str,
+        context: str = "",
+    ) -> ChatResponse:
+        reply = await self.hulk.analyze_image(
+            attachment=attachment,
+            context=context,
+        )
+        return ChatResponse(
+            agent=self.hulk.name,
+            route="hulk",
+            reply=self._with_title("🟢💪 Hulk :", reply),
+            metadata={"routed_by": self.name, "media_type": "image"},
         )
 
     def _with_title(self, title: str, reply: str) -> str:
@@ -123,6 +166,60 @@ class MimirAgent:
             "route fitness, training, nutrition, meal, calorie/macro, physique, "
             "and posture questions to Hulk."
         )
+
+    def _hulk_handoff_reply(self, message: str) -> str:
+        if _contains_chinese(message):
+            return (
+                "Hulk 已上線。直接丟給我你的訓練、課表、動作、飲食、熱量、"
+                "巨量營養素、體態或姿勢問題。💪"
+            )
+        return (
+            "Hulk is here. Send me your workout, routine, exercise, nutrition, "
+            "calorie, macro, physique, or posture question. 💪"
+        )
+
+    def _is_hulk_handoff_only(self, message: str) -> bool:
+        normalized = message.strip().lower()
+        handoff_phrases = {
+            "hulk",
+            "huk",
+            "call hulk",
+            "call huk",
+            "need hulk",
+            "need huk",
+            "i need hulk",
+            "i need huk",
+            "ask hulk",
+            "ask huk",
+            "talk to hulk",
+            "talk to huk",
+            "call sub agent",
+            "call sub-agent",
+            "need sub agent",
+            "need sub-agent",
+            "need $sub agent",
+            "need $sub-agent",
+            "$sub agent",
+            "$sub-agent",
+            "sub agent",
+            "sub-agent",
+            "叫 hulk",
+            "叫hulk",
+            "叫 huk",
+            "叫huk",
+            "找 hulk",
+            "找hulk",
+            "找 huk",
+            "找huk",
+            "需要 hulk",
+            "需要hulk",
+            "需要 huk",
+            "需要huk",
+            "子代理",
+            "叫子代理",
+            "需要子代理",
+        }
+        return normalized in handoff_phrases
 
     def _is_closing(self, message: str) -> bool:
         normalized = message.strip().lower()
@@ -197,13 +294,35 @@ class MimirAgent:
             "pullup",
             "pull-up",
             "workout",
+            "work out",
+            "working out",
+            "exercise",
+            "gym",
+            "muscle",
+            "muscles",
+            "hypertrophy",
+            "strength",
             "routine",
             "program",
             "training question",
             "workout question",
             "fitness question",
+            "call hulk",
+            "call huk",
+            "need hulk",
+            "need huk",
             "ask hulk",
+            "ask huk",
             "talk to hulk",
+            "talk to huk",
+            "call sub agent",
+            "call sub-agent",
+            "need sub agent",
+            "need sub-agent",
+            "need $sub agent",
+            "need $sub-agent",
+            "$sub agent",
+            "$sub-agent",
             "ask a workout",
             "ask about workout",
             "ask about training",
@@ -229,6 +348,14 @@ class MimirAgent:
             "physique",
             "posture",
             "progress photo",
+            "增肌",
+            "肌肉",
+            "肌群",
+            "練胸",
+            "練背",
+            "練腿",
+            "運動",
+            "重量訓練",
             "健身",
             "訓練",
             "重訓",
@@ -256,6 +383,22 @@ class MimirAgent:
             "問飲食",
             "問熱量",
             "問hulk",
+            "問huk",
+            "叫hulk",
+            "叫 hulk",
+            "叫huk",
+            "叫 huk",
+            "找hulk",
+            "找 hulk",
+            "找huk",
+            "找 huk",
+            "需要hulk",
+            "需要 hulk",
+            "需要huk",
+            "需要 huk",
+            "子代理",
+            "叫子代理",
+            "需要子代理",
         }
         if any(keyword in normalized for keyword in hulk_keywords):
             return "hulk"

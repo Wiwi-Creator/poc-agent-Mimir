@@ -10,6 +10,10 @@ LINE_CHANNEL_ACCESS_TOKEN_SECRET_NAME="${LINE_CHANNEL_ACCESS_TOKEN_SECRET_NAME:-
 LINE_CHANNEL_SECRET_SECRET_NAME="${LINE_CHANNEL_SECRET_SECRET_NAME:-LINE_CHANNEL_SECRET}"
 APP_ENV="${APP_ENV:-production}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
+GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT:-${PROJECT_ID}}"
+GOOGLE_CLOUD_LOCATION="${GOOGLE_CLOUD_LOCATION:-global}"
+GEMINI_VISION_MODEL="${GEMINI_VISION_MODEL:-gemini-2.5-flash}"
+MEDIA_TMP_DIR="${MEDIA_TMP_DIR:-/tmp/mimir_media}"
 ALLOW_UNAUTHENTICATED="${ALLOW_UNAUTHENTICATED:-true}"
 INCLUDE_LINE_SECRETS="${INCLUDE_LINE_SECRETS:-true}"
 
@@ -57,6 +61,7 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
   secretmanager.googleapis.com \
+  aiplatform.googleapis.com \
   --project "${PROJECT_ID}"
 
 AUTH_FLAG="--allow-unauthenticated"
@@ -81,12 +86,17 @@ fi
 
 SECRETS_CSV="$(IFS=,; echo "${SECRET_ARGS[*]}")"
 
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member "serviceAccount:${RUNTIME_SERVICE_ACCOUNT}" \
+  --role "roles/aiplatform.user" \
+  --quiet >/dev/null
+
 gcloud run deploy "${SERVICE_NAME}" \
   --source . \
   --region "${REGION}" \
   --project "${PROJECT_ID}" \
   "${AUTH_FLAG}" \
-  --set-env-vars "GROQ_MODEL=${GROQ_MODEL},APP_ENV=${APP_ENV},LOG_LEVEL=${LOG_LEVEL}" \
+  --set-env-vars "GROQ_MODEL=${GROQ_MODEL},APP_ENV=${APP_ENV},LOG_LEVEL=${LOG_LEVEL},GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT},GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION},GEMINI_VISION_MODEL=${GEMINI_VISION_MODEL},MEDIA_TMP_DIR=${MEDIA_TMP_DIR}" \
   --set-secrets "${SECRETS_CSV}"
 
 SERVICE_URL="$(

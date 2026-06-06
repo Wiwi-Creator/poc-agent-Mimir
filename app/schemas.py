@@ -10,6 +10,7 @@ class HealthResponse(BaseModel):
     groq_configured: bool
     line_configured: bool
     line_signature_verification_configured: bool
+    vision_configured: bool
 
 
 class ChatRequest(BaseModel):

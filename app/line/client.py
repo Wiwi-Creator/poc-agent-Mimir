@@ -10,10 +10,12 @@ class LineClient:
         self,
         channel_access_token: str,
         base_url: str = "https://api.line.me/v2/bot",
+        data_base_url: str = "https://api-data.line.me/v2/bot",
         timeout_seconds: float = 15.0,
     ) -> None:
         self.channel_access_token = channel_access_token
         self.base_url = base_url.rstrip("/")
+        self.data_base_url = data_base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
 
     async def start_loading(self, chat_id: str, loading_seconds: int = 10) -> None:
@@ -62,6 +64,25 @@ class LineClient:
             ],
         }
         await self._post("/message/push", payload)
+
+    async def get_message_content(self, message_id: str) -> tuple[bytes, str]:
+        if not self.channel_access_token:
+            raise LineClientError("LINE_CHANNEL_ACCESS_TOKEN is not configured.")
+
+        headers = {"Authorization": f"Bearer {self.channel_access_token}"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                response = await client.get(
+                    f"{self.data_base_url}/message/{message_id}/content",
+                    headers=headers,
+                )
+                response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise LineClientError(f"LINE API error: {exc.response.text}") from exc
+        except httpx.HTTPError as exc:
+            raise LineClientError(f"LINE request failed: {exc}") from exc
+
+        return response.content, response.headers.get("content-type", "image/jpeg")
 
     async def _post(self, path: str, payload: dict) -> None:
         headers = {

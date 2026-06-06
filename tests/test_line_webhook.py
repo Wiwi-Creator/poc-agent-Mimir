@@ -8,9 +8,18 @@ from app.line.webhook import LineSignatureError, handle_line_events, verify_line
 
 
 class FakeMimir:
+    def route(self, message):
+        return "hulk" if "bench" in message.lower() else "mimir"
+
     async def respond(self, request):
         class Response:
             reply = f"reply to {request.message}"
+
+        return Response()
+
+    async def respond_to_image(self, attachment, user_id, context=""):
+        class Response:
+            reply = f"image reply from {attachment.source}"
 
         return Response()
 
@@ -21,6 +30,7 @@ class FakeLineClient:
         self.loading = []
         self.read_tokens = []
         self.pushes = []
+        self.downloaded = []
 
     async def start_loading(self, chat_id, loading_seconds=10):
         self.loading.append((chat_id, loading_seconds))
@@ -33,6 +43,32 @@ class FakeLineClient:
 
     async def push_text(self, user_id, text):
         self.pushes.append((user_id, text))
+
+    async def get_message_content(self, message_id):
+        self.downloaded.append(message_id)
+        return b"image-bytes", "image/jpeg"
+
+
+class FakeMediaStorage:
+    def __init__(self):
+        self.saved = []
+        self.deleted = []
+
+    def save(self, content, mime_type, source):
+        from pathlib import Path
+
+        from app.media.models import MediaAttachment
+
+        attachment = MediaAttachment(
+            path=Path("/tmp/fake-image.jpg"),
+            mime_type=mime_type,
+            source=source,
+        )
+        self.saved.append((content, mime_type, source, attachment))
+        return attachment
+
+    def delete(self, attachment):
+        self.deleted.append(attachment)
 
 
 def make_signature(body: bytes, secret: str) -> str:
@@ -73,7 +109,10 @@ async def test_handle_line_text_message_replies():
     assert result == {"ok": True, "handled": 1, "ignored": 0}
     assert line_client.read_tokens == ["read-token"]
     assert line_client.loading == [("user-123", 10)]
-    assert line_client.pushes == [("user-123", "Mimir is thinking... Meow")]
+    assert line_client.pushes == [
+        ("user-123", "🐈 Meow ~ (Mimir is thinking)"),
+        ("user-123", "go through Hulk 🟢💪"),
+    ]
     assert line_client.replies == [("reply-token", "reply to bench 80kg")]
 
 
@@ -102,3 +141,69 @@ async def test_handle_line_text_message_can_skip_visible_thinking_message():
     assert line_client.loading == [("user-123", 10)]
     assert line_client.pushes == []
     assert line_client.replies == [("reply-token", "reply to hello")]
+
+
+@pytest.mark.asyncio
+async def test_handle_line_image_message_downloads_and_analyzes_physique():
+    line_client = FakeLineClient()
+    media_storage = FakeMediaStorage()
+    payload = {
+        "events": [
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "source": {"userId": "user-123"},
+                "message": {"type": "image", "id": "image-message-id"},
+            }
+        ]
+    }
+
+    result = await handle_line_events(
+        payload,
+        FakeMimir(),
+        line_client,
+        media_storage=media_storage,
+    )
+
+    assert result == {"ok": True, "handled": 1, "ignored": 0}
+    assert line_client.downloaded == ["image-message-id"]
+    assert line_client.pushes == [
+        ("user-123", "🐈 Meow ~ (Mimir is thinking)"),
+        ("user-123", "go through Hulk 🟢💪"),
+    ]
+    assert media_storage.saved[0][0] == b"image-bytes"
+    assert media_storage.saved[0][1] == "image/jpeg"
+    assert media_storage.saved[0][2] == "line:image-message-id"
+    assert media_storage.deleted == [media_storage.saved[0][3]]
+    assert line_client.replies == [
+        ("reply-token", "image reply from line:image-message-id")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_handle_line_image_message_replies_with_fallback_on_failure():
+    class BrokenLineClient(FakeLineClient):
+        async def get_message_content(self, message_id):
+            raise RuntimeError("download failed")
+
+    line_client = BrokenLineClient()
+    payload = {
+        "events": [
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "source": {"userId": "user-123"},
+                "message": {"type": "image", "id": "image-message-id"},
+            }
+        ]
+    }
+
+    result = await handle_line_events(
+        payload,
+        FakeMimir(),
+        line_client,
+        media_storage=FakeMediaStorage(),
+    )
+
+    assert result == {"ok": True, "handled": 1, "ignored": 0}
+    assert "I received your photo" in line_client.replies[0][1]

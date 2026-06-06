@@ -11,10 +11,16 @@ class Settings(BaseSettings):
     groq_base_url: str = "https://api.groq.com/openai/v1"
     line_channel_access_token: str = ""
     line_channel_secret: str = ""
+    line_api_base_url: str = "https://api.line.me/v2/bot"
+    line_data_base_url: str = "https://api-data.line.me/v2/bot"
     line_send_thinking_message: bool = True
     workout_db_path: str = "/tmp/mimir_workouts.sqlite3"
     workout_plan_db_path: str = "/tmp/mimir_workout_plans.sqlite3"
     user_state_db_path: str = "/tmp/mimir_user_state.sqlite3"
+    media_tmp_dir: str = "/tmp/mimir_media"
+    google_cloud_project: str = ""
+    google_cloud_location: str = "global"
+    gemini_vision_model: str = "gemini-2.5-flash"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

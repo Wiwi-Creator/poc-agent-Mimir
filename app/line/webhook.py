@@ -6,9 +6,13 @@ from typing import Any
 
 from app.agents.mimir import MimirAgent
 from app.line.client import LineClient
+from app.media.storage import TemporaryMediaStorage
 from app.schemas import ChatRequest
 
 logger = logging.getLogger(__name__)
+
+THINKING_MESSAGE = "🐈 Meow ~ (Mimir is thinking)"
+HULK_HANDOFF_MESSAGE = "go through Hulk 🟢💪"
 
 
 class LineSignatureError(RuntimeError):
@@ -31,6 +35,7 @@ async def handle_line_events(
     payload: dict[str, Any],
     mimir: MimirAgent,
     line_client: LineClient,
+    media_storage: TemporaryMediaStorage | None = None,
     send_thinking_message: bool = True,
 ) -> dict[str, Any]:
     handled = 0
@@ -55,6 +60,54 @@ async def handle_line_events(
         else:
             logger.info("LINE message event did not include markAsReadToken")
 
+        if message.get("type") == "image":
+            await _try_start_loading(line_client, user_id)
+            if send_thinking_message:
+                await _try_push_thinking_message(line_client, user_id)
+                await _try_push_hulk_handoff_message(line_client, user_id)
+
+            if not media_storage:
+                await line_client.reply_text(
+                    reply_token,
+                    "Mimir received the image, but media storage is not configured.",
+                )
+                handled += 1
+                continue
+
+            attachment = None
+            try:
+                content, mime_type = await line_client.get_message_content(message["id"])
+                attachment = media_storage.save(
+                    content=content,
+                    mime_type=mime_type,
+                    source=f"line:{message['id']}",
+                )
+                agent_response = await mimir.respond_to_image(
+                    attachment=attachment,
+                    user_id=user_id,
+                    context=(
+                        "LINE image message. Decide whether this is food, physique, "
+                        "posture, or lifting form. If it is food, estimate calories "
+                        "and macros, then ask the user to confirm portion details."
+                    ),
+                )
+                await line_client.reply_text(reply_token, agent_response.reply)
+            except Exception:
+                logger.exception("Could not process LINE image message")
+                await line_client.reply_text(
+                    reply_token,
+                    (
+                        "🐱 Mimir :\n"
+                        "I received your photo, but Hulk could not analyze it yet. "
+                        "Please try again later, or send a short text question for Hulk. Meow ~"
+                    ),
+                )
+            finally:
+                if attachment:
+                    media_storage.delete(attachment)
+            handled += 1
+            continue
+
         if message.get("type") != "text":
             await line_client.reply_text(
                 reply_token,
@@ -72,6 +125,9 @@ async def handle_line_events(
             user_id=user_id,
             conversation_id=f"line:{user_id}",
         )
+        route = mimir.route(chat_request.message)
+        if send_thinking_message and route == "hulk":
+            await _try_push_hulk_handoff_message(line_client, user_id)
         agent_response = await mimir.respond(chat_request)
         await line_client.reply_text(reply_token, agent_response.reply)
         handled += 1
@@ -101,8 +157,17 @@ async def _try_mark_as_read(line_client: LineClient, mark_as_read_token: str) ->
 
 async def _try_push_thinking_message(line_client: LineClient, user_id: str) -> None:
     try:
-        await line_client.push_text(user_id, "Mimir is thinking... Meow")
+        await line_client.push_text(user_id, THINKING_MESSAGE)
         logger.info("Pushed LINE thinking message")
     except Exception:
         logger.exception("Could not push LINE thinking message")
+        return
+
+
+async def _try_push_hulk_handoff_message(line_client: LineClient, user_id: str) -> None:
+    try:
+        await line_client.push_text(user_id, HULK_HANDOFF_MESSAGE)
+        logger.info("Pushed LINE Hulk handoff message")
+    except Exception:
+        logger.exception("Could not push LINE Hulk handoff message")
         return
